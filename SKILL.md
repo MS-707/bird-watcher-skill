@@ -42,7 +42,101 @@ Camera and YOLO run in separate threads — the video feed is always smooth rega
 - Python 3.10+
 - Moondream Station running on localhost:2020 (optional, for species ID)
 
-## Installation
+## Agent Installation Guide
+
+When a user asks to set up bird watching, follow these steps in order. Each step has a verification check — do NOT proceed until the check passes.
+
+### Step 1: Check Python version
+```bash
+python3 --version
+```
+**Requires:** Python 3.10+. If not installed, tell the user to install via `brew install python3` or from python.org.
+
+### Step 2: Install dependencies
+```bash
+pip3 install --break-system-packages ultralytics opencv-python flask requests numpy
+```
+**Verify:**
+```bash
+python3 -c "import cv2, flask, ultralytics, requests; print('All dependencies OK')"
+```
+If `--break-system-packages` fails, try without it. If that fails, try `pip3 install --user`. On some systems you may need a virtual environment:
+```bash
+python3 -m venv ~/.openclaw/skills/bird-watcher/venv
+source ~/.openclaw/skills/bird-watcher/venv/bin/activate
+pip install ultralytics opencv-python flask requests numpy
+```
+
+### Step 3: Download YOLO model
+The model auto-downloads on first run, but you can pre-download:
+```bash
+python3 -c "from ultralytics import YOLO; YOLO('yolo11s.pt'); print('Model downloaded')"
+```
+**Verify:** File `yolo11s.pt` exists in the working directory.
+
+### Step 4: Camera permissions (macOS — CRITICAL)
+This is the most common failure point. Python MUST have camera access granted by the user.
+
+**Tell the user:** "I need you to run one command in Terminal to grant camera permission. Open Terminal and paste this:"
+```bash
+python3 -c "import cv2; cap = cv2.VideoCapture(0); print('Camera:', cap.isOpened()); cap.release()"
+```
+macOS will show a dialog asking to allow camera access. The user MUST click **Allow**.
+
+**Verify:** The command above prints `Camera: True`. If it prints `False`, camera access was denied. The user needs to go to System Settings → Privacy & Security → Camera and enable it for Terminal or Python.
+
+**IMPORTANT:** This command must be run interactively in Terminal by the user, NOT via exec/nohup/background. macOS only shows the permission dialog for interactive foreground processes.
+
+### Step 5: Moondream Station (optional but recommended)
+Moondream provides species identification. Without it, you get bounding boxes but no species names.
+
+**Check if running:**
+```bash
+curl -s http://localhost:2020/health
+```
+If it returns `{"status":"ok"}`, Moondream is ready. If not, the bird watcher still works — it just won't identify species.
+
+### Step 6: Firewall (for network streaming)
+If the user wants to view the stream on their phone/TV:
+
+**Tell the user:** "To view the stream on other devices, you'll need to either disable the macOS firewall temporarily or add Python to the allowed apps. Go to System Settings → Network → Firewall."
+
+**Verify:**
+```bash
+/usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate
+```
+If enabled, the stream will only work on `localhost` unless the user adjusts it.
+
+### Step 7: Start the stream
+The stream script MUST be run interactively in Terminal (for camera access):
+
+**Tell the user:** "Run this in your Terminal window:"
+```bash
+cd ~/.openclaw/skills/bird-watcher && python3 bird_watcher_stream.py
+```
+
+Then provide them the URL: `http://<LOCAL_IP>:8888`
+
+To find the local IP:
+```bash
+ipconfig getifaddr en0
+```
+
+### Common Issues & Fixes
+
+| Problem | Cause | Fix |
+|---------|-------|-----|
+| `ModuleNotFoundError: No module named 'cv2'` | OpenCV not installed | `pip3 install --break-system-packages opencv-python` |
+| `ModuleNotFoundError: No module named 'ultralytics'` | YOLO not installed | `pip3 install --break-system-packages ultralytics` |
+| `Camera: False` or black screen | No camera permission | User must run the camera check command interactively in Terminal and click Allow |
+| `OpenCV: not authorized to capture video` | Running in background | Must run the stream script in a foreground Terminal window, not via nohup/exec |
+| Stream works on localhost but not phone | macOS firewall blocking | User disables firewall or adds Python to allowed apps |
+| `Address already in use` on port 8888 | Previous instance running | `kill $(lsof -ti:8888)` or use `--port 9999` |
+| Low fps (<5) | Using large YOLO model | Switch to `--model yolo11n.pt` for speed |
+| No species identification | Moondream not running | Install and start Moondream Station on localhost:2020 |
+| `No module named 'torch'` | PyTorch not installed | `pip3 install --break-system-packages torch torchvision` |
+
+## Manual Installation (for users)
 
 ```bash
 # Clone the skill
@@ -52,19 +146,12 @@ cd bird-watcher-skill
 # Install dependencies
 pip3 install --break-system-packages -r requirements.txt
 
-# Download YOLO model (auto-downloads on first run)
-# Default: yolo11s.pt (good balance of speed + accuracy)
-```
-
-### Camera Permissions (macOS)
-
-Python needs camera access. Run this once in Terminal to trigger the permission dialog:
-
-```bash
+# Grant camera permission (run in Terminal, click Allow)
 python3 -c "import cv2; cap = cv2.VideoCapture(0); print('Camera:', cap.isOpened()); cap.release()"
-```
 
-Click **Allow** when macOS asks. This only needs to happen once.
+# Start the stream
+python3 bird_watcher_stream.py
+```
 
 ### Firewall
 
