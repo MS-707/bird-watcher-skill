@@ -26,8 +26,19 @@ BIRD_CLASS_ID = 14
 CONFIDENCE_THRESHOLD = 0.15
 DETECTION_PERSIST_SECONDS = 3
 MOONDREAM_URL = "http://localhost:2020"
-DETECTIONS_DIR = os.path.expanduser("~/.openclaw/workspace/builds/bird-watcher/detections")
+MAX_DETECTION_FILES = 500  # Auto-cleanup after this many saved frames
+MAX_CONCURRENT_VIEWERS = 5
+
+# Paths — use relative/expanduser, never hardcoded usernames
+SKILL_DIR = os.path.dirname(os.path.abspath(__file__))
+DETECTIONS_DIR = os.path.join(SKILL_DIR, "detections")
 CENSUS_SCRIPT = os.path.expanduser("~/.openclaw/skills/wildlife-census/census.sh")
+
+# Auth — generate a random token on startup for stream access
+import secrets
+STREAM_TOKEN = os.environ.get("BIRDWATCH_TOKEN", secrets.token_urlsafe(16))
+active_viewers = 0
+viewers_lock = threading.Lock()
 
 os.makedirs(DETECTIONS_DIR, exist_ok=True)
 
@@ -60,8 +71,23 @@ stats = {
 }
 
 
+def verify_moondream():
+    """Check if Moondream Station is actually running."""
+    try:
+        resp = requests.get(f"{MOONDREAM_URL}/health", timeout=3)
+        if resp.ok and resp.json().get("server") == "moondream-station":
+            return True
+    except:
+        pass
+    return False
+
+moondream_available = False  # Set during startup
+
+
 def moondream_identify(img, bbox):
     """Species ID via Moondream VLM."""
+    if not moondream_available:
+        return
     try:
         x1, y1, x2, y2 = bbox
         h, w = img.shape[:2]
@@ -87,14 +113,15 @@ def moondream_identify(img, bbox):
             if len(stats["detection_log"]) > 100:
                 stats["detection_log"].pop(0)
             
-            # Log to wildlife census
+            # Log to wildlife census (only if script exists)
             clean = species.split(",")[0].split(".")[0].strip()
-            try:
-                import subprocess
-                subprocess.run([CENSUS_SCRIPT, "log", clean, "1", f"BirdWatcher: {species[:80]}"],
-                             capture_output=True, timeout=10)
-            except:
-                pass
+            if os.path.exists(CENSUS_SCRIPT):
+                try:
+                    import subprocess
+                    subprocess.run([CENSUS_SCRIPT, "log", clean, "1", f"BirdWatcher: {species[:80]}"],
+                                 capture_output=True, timeout=10)
+                except:
+                    pass
     except:
         pass
 
@@ -231,6 +258,18 @@ def yolo_thread():
 
             stats["total_detections"] += 1
 
+            # Auto-cleanup old detections if over limit
+            try:
+                det_files = sorted(
+                    [f for f in os.listdir(DETECTIONS_DIR) if f.endswith('.jpg')],
+                    key=lambda f: os.path.getmtime(os.path.join(DETECTIONS_DIR, f))
+                )
+                while len(det_files) > MAX_DETECTION_FILES:
+                    oldest = det_files.pop(0)
+                    os.remove(os.path.join(DETECTIONS_DIR, oldest))
+            except:
+                pass
+
             # Save detection frames
             ts_str = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
             orig_path = os.path.join(DETECTIONS_DIR, f"orig_{ts_str}.jpg")
@@ -285,14 +324,40 @@ HTML_PAGE = """
 """
 
 
+def check_auth():
+    """Verify stream token in query params."""
+    from flask import request, abort
+    token = request.args.get('token', '')
+    if token != STREAM_TOKEN:
+        abort(403)
+
+
 @app.route('/')
 def index():
-    return render_template_string(HTML_PAGE)
+    from flask import request
+    token = request.args.get('token', '')
+    if token != STREAM_TOKEN:
+        return '<html><body style="background:#000;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh"><div><h1>🐦 Bird Watcher</h1><p>Access token required. Add ?token=YOUR_TOKEN to the URL.</p></div></body></html>', 403
+    page = HTML_PAGE.replace('/feed', f'/feed?token={STREAM_TOKEN}')
+    return render_template_string(page)
 
 
 @app.route('/feed')
 def video_feed():
-    return Response(generate_mjpeg(), mimetype='multipart/x-mixed-replace; boundary=frame')
+    global active_viewers
+    from flask import request, abort
+    token = request.args.get('token', '')
+    if token != STREAM_TOKEN:
+        abort(403)
+    with viewers_lock:
+        if active_viewers >= MAX_CONCURRENT_VIEWERS:
+            abort(503)  # Too many viewers
+        active_viewers += 1
+    try:
+        return Response(generate_mjpeg(), mimetype='multipart/x-mixed-replace; boundary=frame')
+    finally:
+        with viewers_lock:
+            active_viewers = max(0, active_viewers - 1)
 
 
 def main():
@@ -306,6 +371,9 @@ def main():
     finally:
         s.close()
 
+    global moondream_available
+    moondream_available = verify_moondream()
+
     print(f"\n{'=' * 60}")
     print(f"🐦 Bird Watcher Live Stream v3 — Decoupled Architecture")
     print(f"   Camera: Full native fps (decoupled from YOLO)")
@@ -316,7 +384,14 @@ def main():
     print(f"")
     print(f"   Local:   http://localhost:{PORT}")
     print(f"   Network: http://{local_ip}:{PORT}")
-    print(f"   AirPlay: Open network URL on iPhone → AirPlay to TV")
+    print(f"   Moondream: {'Connected ✅' if moondream_available else 'Not available (no species ID)'}")
+    print(f"   Max viewers: {MAX_CONCURRENT_VIEWERS}")
+    print(f"   Max saved frames: {MAX_DETECTION_FILES}")
+    print(f"")
+    print(f"   🔐 Stream URL (share this):")
+    print(f"   http://{local_ip}:{PORT}?token={STREAM_TOKEN}")
+    print(f"")
+    print(f"   AirPlay: Open the URL on iPhone → AirPlay to TV")
     print(f"{'=' * 60}\n")
 
     # Start threads
