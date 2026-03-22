@@ -67,7 +67,7 @@ stats = {
     "yolo_fps": 0,
     "bird_count": 0,
     "total_detections": 0,
-    "last_species": "—",
+    "last_species": "Bird",
     "detection_log": [],
 }
 
@@ -108,8 +108,12 @@ def moondream_identify(img, bbox):
         )
         if resp.ok:
             data = resp.json()
-            species = data.get("caption", data.get("result", "Unknown")).strip()
-            stats["last_species"] = species
+            species = data.get("caption", data.get("result", "")).strip()
+            # Only update species if Moondream gave a real answer
+            bad_answers = ["unknown", "not sure", "can't tell", "i can't", "cannot", "unclear", "hard to", "difficult to", "image", "photo", "picture"]
+            if species and not any(bad in species.lower() for bad in bad_answers):
+                stats["last_species"] = species
+            # If Moondream couldn't ID it, keep the default "Bird"
             stats["detection_log"].append({"time": datetime.now().strftime("%H:%M:%S"), "species": species})
             if len(stats["detection_log"]) > 100:
                 stats["detection_log"].pop(0)
@@ -184,10 +188,10 @@ def camera_thread():
                 bird_h = y2 - y1
                 label = f"Bird {conf:.0%}"
                 sp = stats["last_species"]
-                if sp and sp != "—" and "unknown" not in sp.lower():
-                    label = f"{sp.split(',')[0].split('.')[0][:22]} {conf:.0%}"
+                if sp and sp not in ("Bird", "—", "") and "unknown" not in sp.lower() and "not sure" not in sp.lower() and "can't" not in sp.lower():
+                    label = f"{sp.split(',')[0].split('.')[0].strip()[:22]} {conf:.0%}"
                 if bird_w < MIN_BIRD_SIZE or bird_h < MIN_BIRD_SIZE:
-                    label = f"Bird {conf:.0%} (distant)"
+                    label = f"Bird {conf:.0%} (far)"
                 (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)
                 cv2.rectangle(display, (x1, y1 - th - 10), (x1 + tw + 6, y1), color, -1)
                 cv2.putText(display, label, (x1 + 3, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2)
