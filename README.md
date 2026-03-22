@@ -1,45 +1,251 @@
-# 🐦 Bird Watcher — OpenClaw Skill
+# 🐦 Bird Watcher
 
-Real-time bird detection using YOLOv11 + Moondream VLM for species identification. Streams a live annotated video feed to any device on your local network.
+**Real-time bird detection for your backyard, porch, or feeder — powered by YOLOv11 and local AI.**
 
-## Quick Start
+An [OpenClaw](https://openclaw.ai) skill that turns any Mac with a webcam into a live bird detection station. YOLO identifies birds in real-time with bounding boxes, Moondream VLM identifies the species, and you watch it all from your phone, tablet, or TV via a simple web link.
+
+Everything runs locally on your machine. No cloud. No subscriptions. No data leaves your network.
+
+![License](https://img.shields.io/badge/license-MIT-green)
+![Python](https://img.shields.io/badge/python-3.10+-blue)
+![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)
+![YOLO](https://img.shields.io/badge/YOLOv11-Ultralytics-purple)
+
+---
+
+## What It Does
+
+You point a camera at your bird feeder. Bird Watcher does the rest:
+
+- **Detects birds in real-time** using YOLOv11 — green bounding boxes appear the instant a bird enters the frame
+- **Identifies species** by cropping the detected bird and asking a local VLM (Moondream) what it is
+- **Streams live video** to any device on your network — phone, tablet, laptop, or AirPlay to your TV
+- **Saves every detection** — both the original frame and the annotated version with bounding boxes, timestamped
+- **Logs to wildlife census** — if the OpenClaw `wildlife-census` skill is installed, sightings are recorded automatically
+- **Listens for bird calls** — optional BirdNET integration for audio-based species identification
+
+The camera feed and YOLO detection run in separate threads. The video is always smooth at full camera fps (~30fps). YOLO processes independently at ~10-15fps on Apple Silicon. You never see lag.
+
+## How It Looks
+
+When running, the stream shows:
+- Live camera feed at native resolution (1280×720)
+- Green bounding boxes on detected birds with confidence percentage
+- Species label (from Moondream VLM) on each box
+- HUD overlay: bird count, camera fps, YOLO fps, detection counter, last species identified
+- Timestamp in the corner
+
+## Requirements
+
+### Hardware
+
+| Component | Minimum | Recommended |
+|-----------|---------|-------------|
+| Mac | Any Mac with webcam | Apple Silicon (M1/M2/M3/M4) |
+| Camera | Built-in MacBook camera | USB webcam for dedicated outdoor setup |
+| RAM | 8GB | 16GB |
+| Network | Not required for local use | WiFi for streaming to other devices |
+
+Intel Macs work but expect ~5-8fps YOLO processing instead of 10-15fps.
+
+### Software
+
+- **Python 3.10 or newer** — check with `python3 --version`
+- **macOS** — camera permissions require macOS Security & Privacy settings
+- **Moondream Station** (optional) — for species identification. Without it, you still get bird detection with bounding boxes, just no species names.
+
+### What This Skill Cannot Do
+
+- **It cannot access the camera without your explicit permission.** macOS requires you to grant camera access interactively — no script can bypass this. You must run a command in Terminal and click "Allow."
+- **It cannot stream to the internet by default.** The feed is only accessible on your local network. This is intentional for privacy. See the Security section below if you want remote access.
+- **It cannot identify every species perfectly.** Moondream is a general-purpose VLM, not a bird-specific model. It's good but not ornithologist-grade. Common backyard birds (jays, sparrows, robins, finches, hawks) work well. Rare species may get generic labels.
+- **It cannot run in the background on macOS.** The camera permission is tied to the foreground Terminal process. The script must run in an open Terminal window.
+
+## Installation
+
+### Step 1: Clone the repo
 
 ```bash
-# Install dependencies
+git clone https://github.com/MS-707/bird-watcher-skill.git
+cd bird-watcher-skill
+```
+
+### Step 2: Install dependencies
+
+```bash
 pip3 install -r requirements.txt
+```
 
-# Grant camera permission (macOS — run once)
-python3 -c "import cv2; cap = cv2.VideoCapture(0); print(cap.isOpened()); cap.release()"
+If you get a `externally-managed-environment` error on newer Python:
+```bash
+pip3 install --break-system-packages -r requirements.txt
+```
 
-# Start live stream
+Or use a virtual environment:
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+**Verify everything installed:**
+```bash
+python3 -c "import cv2, flask, ultralytics, requests; print('All dependencies OK')"
+```
+
+### Step 3: Grant camera permission
+
+This is the most important step. Run this command **in Terminal** (not from a script):
+
+```bash
+python3 -c "import cv2; cap = cv2.VideoCapture(0); print('Camera:', cap.isOpened()); cap.release()"
+```
+
+macOS will show a permission dialog. **Click Allow.** You only need to do this once.
+
+If it prints `Camera: True` — you're good. If `Camera: False` — go to System Settings → Privacy & Security → Camera and enable Terminal (or Python).
+
+### Step 4: Start the stream
+
+```bash
 python3 bird_watcher_stream.py
 ```
 
-Open `http://YOUR_IP:8888` on your phone, tablet, or AirPlay to TV.
+The script will print a URL like:
+```
+🐦 Bird Watcher Live Stream v3
+   🔐 Stream URL: http://192.168.1.44:8888?token=abc123xyz
+```
 
-## Features
+Open that URL on your phone or any device on the same WiFi. The token is generated fresh each time you start the stream — only people with the URL can view your camera feed.
 
-- 🎥 **Live video stream** at full camera fps with YOLO bounding boxes
-- 🧠 **Species identification** via Moondream VLM on detected birds
-- 💾 **Auto-saves** detection frames (original + annotated)
-- 📊 **HUD overlay** with bird count, fps, detection log
-- 📱 **AirPlay compatible** — view on any device on your network
-- 🔗 **OpenClaw integration** — wildlife census logging, BirdNET audio, Telegram alerts
+## Configuration
 
-## YOLO Models
+```bash
+python3 bird_watcher_stream.py --port 9999           # Custom port
+python3 bird_watcher_stream.py --model yolo11n.pt     # Nano — fastest, less accurate
+python3 bird_watcher_stream.py --model yolo11m.pt     # Medium — slower, more accurate
+python3 bird_watcher_stream.py --confidence 0.20      # Higher = fewer false positives
+python3 bird_watcher_stream.py --persist 5             # Seconds to keep bounding box visible
+```
 
-| Model | FPS (M1) | Accuracy | Command |
-|-------|----------|----------|---------|
-| Nano | ~15-25 | Good | `--model yolo11n.pt` |
-| **Small** | **~10-15** | **Better** | **`--model yolo11s.pt` (default)** |
-| Medium | ~5-8 | Great | `--model yolo11m.pt` |
+### YOLO Model Comparison
+
+| Model | Size | FPS (M1) | FPS (Intel) | Accuracy | Use Case |
+|-------|------|----------|-------------|----------|----------|
+| `yolo11n.pt` | 5MB | 15-25 | 8-12 | Good | Smooth streaming, less accurate |
+| `yolo11s.pt` | 18MB | 10-15 | 5-8 | **Better** | **Recommended balance** |
+| `yolo11m.pt` | 39MB | 5-8 | 2-4 | Great | Serious detection, still watchable |
+| `yolo11l.pt` | 87MB | 2-4 | <2 | Excellent | Maximum accuracy, slideshow fps |
+
+Models auto-download on first run. They detect "bird" as one of 80 COCO object classes. No custom training needed for general bird detection.
 
 ## Architecture
 
-Camera and YOLO run in separate threads — video is always smooth, YOLO boxes update independently.
+```
+┌─────────────────────────────────────────────┐
+│                 Camera Thread               │
+│  cv2.VideoCapture(0) → 30fps raw frames     │
+│  Overlays latest YOLO boxes onto each frame │
+│  Encodes as JPEG → MJPEG stream             │
+└──────────────────┬──────────────────────────┘
+                   │ shares frames via lock
+┌──────────────────▼──────────────────────────┐
+│                 YOLO Thread                 │
+│  Pulls latest frame independently           │
+│  Runs YOLOv11 detection (bird class only)   │
+│  Stores bounding box coordinates + conf     │
+│  Saves detection frames to disk             │
+└──────────────────┬──────────────────────────┘
+                   │ on bird detection (5s cooldown)
+┌──────────────────▼──────────────────────────┐
+│              Moondream Thread               │
+│  Crops detected bird region + padding       │
+│  Sends to local VLM for species ID          │
+│  Updates species label on HUD               │
+└─────────────────────────────────────────────┘
+```
 
-See [SKILL.md](SKILL.md) for full documentation.
+The camera thread never waits for YOLO. YOLO never waits for Moondream. Each runs at its own natural speed. The video feed is always smooth.
+
+## Detection Output
+
+Every time a bird is detected, two files are saved to `./detections/`:
+
+```
+detections/
+├── orig_20260321_152401_728656.jpg   ← original frame, no annotations
+├── det_20260321_152401_728656.jpg    ← annotated with bounding boxes
+├── orig_20260321_153211_614977.jpg
+├── det_20260321_153211_614977.jpg
+└── session_20260321_160000.json      ← session summary (batch mode only)
+```
+
+Files auto-rotate after 500 frames to prevent filling your disk. Oldest files are deleted first. Adjust `MAX_DETECTION_FILES` in the script to change this limit.
+
+## Batch Mode
+
+For unattended monitoring (no live stream, just detection logging):
+
+```bash
+python3 bird_watcher_batch.py --duration 3600 --interval 10
+```
+
+Captures a frame every 10 seconds for 1 hour. Runs YOLO + Moondream on each frame. Saves detections. Prints a summary at the end. Good for understanding when birds visit your feeder.
+
+## Security Considerations
+
+This skill accesses your camera and streams video on your local network. Please understand:
+
+- **Camera access** is gated by macOS permissions. No script can access your camera without your explicit consent via the system dialog.
+- **Stream authentication** — a random token is generated each time you start the stream. Only devices with the full URL (including token) can view the feed. The token is printed in your Terminal when the stream starts.
+- **Local network only** — the stream is NOT accessible from the internet by default. It binds to your local IP address. Only devices on your WiFi can connect.
+- **No cloud services** — YOLO runs locally via PyTorch. Moondream runs locally. No images or video are sent to any external server. Everything stays on your machine.
+- **Detection frames on disk** — saved frames contain images from your camera. They're stored in the `detections/` folder. Be aware of this if you share your computer or back up to cloud storage. Auto-cleanup removes old files after 500 frames.
+- **Viewer limit** — maximum 5 concurrent viewers to prevent resource exhaustion.
+- **Flask development server** — the built-in web server is suitable for home use but not hardened for public internet exposure. Do not expose this directly to the internet without a reverse proxy and proper TLS.
+
+**If you want remote access** (viewing from outside your home network), consider:
+- [Tailscale](https://tailscale.com) — free, creates a private VPN between your devices
+- An SSH tunnel — `ssh -L 8888:localhost:8888 your-mac-ip`
+- Do NOT use ngrok or port forwarding without understanding the privacy implications of exposing your camera feed
+
+## OpenClaw Integration
+
+Bird Watcher works standalone, but it's designed to integrate with the OpenClaw agent ecosystem:
+
+- **Wildlife Census** — if the `wildlife-census` skill is installed, every detection is automatically logged with species, count, and timestamp
+- **BirdNET Audio** — if the `birdnet-audio` skill is installed, audio species identification runs in parallel with video detection
+- **Telegram Alerts** — your OpenClaw agent can send detection photos to Telegram when a bird is spotted
+- **Scheduled Sessions** — set up cron jobs to run batch detection during peak feeding times (early morning, late afternoon)
+
+## Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| `Camera: False` or black screen | Run the camera permission command interactively in Terminal. Click Allow. |
+| `OpenCV: not authorized to capture video` | Must run in foreground Terminal, not via nohup, background, or exec. |
+| Stream works on Mac but not phone | macOS firewall is blocking. Disable temporarily or add Python to allowed apps. |
+| Low fps (<5) | Use `--model yolo11n.pt` for faster processing. Close GPU-heavy apps. |
+| No species identification | Moondream Station not running. The stream still works — you just get "Bird" instead of species names. |
+| `Address already in use` | Previous instance still running. `kill $(lsof -ti:8888)` or use `--port 9999`. |
+| Birds not being detected | Lower threshold: `--confidence 0.10`. Move camera closer to feeder. Ensure birds aren't too small in frame. |
+| `ModuleNotFoundError` | Run `pip3 install -r requirements.txt` again. Check you're using the right Python. |
+
+## Credits & Acknowledgments
+
+- **[YOLOv11](https://github.com/ultralytics/ultralytics)** by Ultralytics — the object detection model
+- **[Moondream](https://moondream.ai/)** — local vision-language model for species identification
+- **[BirdNET](https://github.com/kahst/BirdNET-Analyzer)** by Cornell Lab of Ornithology — audio species identification
+- **[OpenClaw](https://openclaw.ai)** — the agent framework this skill is designed for
+- **[Birds-YOLO](https://pmc.ncbi.nlm.nih.gov/articles/PMC12650164/)** — research paper on YOLOv11 bird detection that inspired the approach
+
+## Contributing
+
+Issues and pull requests welcome. If you improve the detection, add support for new platforms (Linux, Windows), or create a better dashboard UI, we'd love to see it.
 
 ## License
 
-MIT — Created by Victor & Mark as an [OpenClaw](https://openclaw.ai) skill.
+MIT — see [LICENSE](LICENSE) for details.
+
+Created by Mark Starr & Victor as an open-source [OpenClaw](https://openclaw.ai) skill. Free to use, modify, and share.
