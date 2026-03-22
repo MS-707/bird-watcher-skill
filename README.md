@@ -108,7 +108,7 @@ If it prints `Camera: True` — you're good. If `Camera: False` — go to System
 ### Step 4: Start the stream
 
 ```bash
-python3 bird_watcher_stream.py
+python3 main.py
 ```
 
 The script will print a URL like:
@@ -119,15 +119,40 @@ The script will print a URL like:
 
 Open that URL on your phone or any device on the same WiFi. The token is generated fresh each time you start the stream — only people with the URL can view your camera feed.
 
+> **Note:** `bird_watcher_stream.py` is kept as a backwards-compatible wrapper that calls `main.py`.
+
 ## Configuration
 
+All settings can be passed via CLI flags or environment variables:
+
 ```bash
-python3 bird_watcher_stream.py --port 9999           # Custom port
-python3 bird_watcher_stream.py --model yolo11n.pt     # Nano — fastest, less accurate
-python3 bird_watcher_stream.py --model yolo11m.pt     # Medium — slower, more accurate
-python3 bird_watcher_stream.py --confidence 0.20      # Higher = fewer false positives
-python3 bird_watcher_stream.py --persist 5             # Seconds to keep bounding box visible
+# CLI flags
+python3 main.py --port 9999           # Custom port
+python3 main.py --model yolo11n.pt     # Nano — fastest, less accurate
+python3 main.py --model yolo11m.pt     # Medium — slower, more accurate
+python3 main.py --confidence 0.20      # Higher = fewer false positives
+python3 main.py --persist 5            # Seconds to keep bounding box visible
+
+# Environment variables
+BIRDWATCH_PORT=9999 python3 main.py
+BIRDWATCH_MODEL=yolo11n.pt python3 main.py
+BIRDWATCH_CONFIDENCE=0.20 python3 main.py
+MOONDREAM_URL=http://192.168.1.50:2020 python3 main.py
 ```
+
+| Environment Variable | Default | Description |
+|---------------------|---------|-------------|
+| `BIRDWATCH_PORT` | 8888 | HTTP port for stream server |
+| `BIRDWATCH_MODEL` | yolo11s.pt | YOLO model file |
+| `BIRDWATCH_CONFIDENCE` | 0.15 | Detection confidence threshold |
+| `BIRDWATCH_PERSIST` | 3 | Seconds to keep bounding boxes visible |
+| `BIRDWATCH_TOKEN` | (random) | Stream authentication token |
+| `BIRDWATCH_MAX_FILES` | 500 | Max saved detection frames before cleanup |
+| `BIRDWATCH_MAX_VIEWERS` | 5 | Max concurrent stream viewers |
+| `BIRDWATCH_MIN_BIRD_SIZE` | 50 | Min pixel size to trigger species ID |
+| `MOONDREAM_URL` | http://localhost:2020 | Moondream VLM endpoint |
+| `BIRDWATCH_DURATION` | 1800 | Batch mode: total run time in seconds |
+| `BIRDWATCH_INTERVAL` | 8 | Batch mode: seconds between captures |
 
 ### YOLO Model Comparison
 
@@ -139,6 +164,25 @@ python3 bird_watcher_stream.py --persist 5             # Seconds to keep boundin
 | `yolo11l.pt` | 87MB | 2-4 | <2 | Excellent | Maximum accuracy, slideshow fps |
 
 Models auto-download on first run. They detect "bird" as one of 80 COCO object classes. No custom training needed for general bird detection.
+
+## Project Structure
+
+```
+bird-watcher-skill/
+├── main.py                    ← Primary entry point (live stream)
+├── bird_watcher_stream.py     ← Backwards-compatible wrapper → main.py
+├── bird_watcher_batch.py      ← Batch detection mode (interval captures)
+├── config.py                  ← argparse CLI + env var configuration
+├── camera.py                  ← Camera capture thread + HUD overlay
+├── detector.py                ← YOLO detection thread + frame saving
+├── species_id.py              ← Moondream VLM species identification
+├── storage.py                 ← Directory management + cleanup
+├── stream_server.py           ← Flask MJPEG server + auth
+├── requirements.txt
+├── yolo11s.pt                 ← YOLO model (auto-downloaded)
+├── SKILL.md                   ← OpenClaw skill definition
+└── detections/                ← Saved detection frames (auto-managed)
+```
 
 ## Architecture
 
@@ -181,7 +225,7 @@ detections/
 └── session_20260321_160000.json      ← session summary (batch mode only)
 ```
 
-Files auto-rotate after 500 frames to prevent filling your disk. Oldest files are deleted first. Adjust `MAX_DETECTION_FILES` in the script to change this limit.
+Files auto-rotate after 500 frames to prevent filling your disk. Oldest files are deleted first. Adjust via the `BIRDWATCH_MAX_FILES` environment variable or `--max-files` flag.
 
 ## Batch Mode
 

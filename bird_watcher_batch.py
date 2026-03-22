@@ -1,12 +1,21 @@
 #!/usr/bin/env python3
 """
-Bird Watcher Batch v2 — YOLO + Moondream Hybrid Detection.
-- YOLO for fast bird detection with bounding boxes
-- Moondream VLM for species identification on detected birds
-- BirdNET for audio species detection
-- Saves annotated photos on detection
+Bird Watcher Batch — YOLO + Moondream hybrid detection.
 
-Usage: python3 bird_watcher_batch.py [--duration 1800] [--interval 8] [--model yolo11s.pt] [--confidence 0.15]
+Captures frames at intervals, runs YOLO for bird detection, Moondream VLM
+for species identification, and BirdNET for audio species detection.
+Saves annotated photos and session logs.
+
+Usage:
+    python3 bird_watcher_batch.py [--duration 1800] [--interval 8]
+                                  [--model yolo11s.pt] [--confidence 0.15]
+
+Environment variables:
+    BIRDWATCH_DURATION      Total run time in seconds (default: 1800)
+    BIRDWATCH_INTERVAL      Seconds between captures (default: 8)
+    BIRDWATCH_MODEL         YOLO model file (default: yolo11s.pt)
+    BIRDWATCH_CONFIDENCE    Detection confidence threshold (default: 0.15)
+    MOONDREAM_URL           Moondream VLM endpoint (default: http://localhost:2020)
 """
 
 import json
@@ -18,12 +27,12 @@ import time
 
 import base64
 import cv2
-import numpy as np
 import requests
 from datetime import datetime
 from ultralytics import YOLO
 
-from config import get_config, setup_logging, CENSUS_SCRIPT
+from config import get_config, setup_logging
+from species_id import verify_moondream, _log_to_census
 
 logger = logging.getLogger("bird-watcher")
 
@@ -31,7 +40,7 @@ SNAP_DIR = "/tmp/victor_vision"
 
 
 def capture_frame(output_dir):
-    """Capture via snap watcher (has camera permissions)."""
+    """Capture a frame via the snap watcher (has camera permissions)."""
     os.makedirs(SNAP_DIR, exist_ok=True)
     ready_file = os.path.join(SNAP_DIR, "ready")
     try:
@@ -58,7 +67,7 @@ def capture_frame(output_dir):
 
 
 def yolo_detect_birds(model, image_path, confidence, bird_class_id):
-    """Run YOLO on frame, return bird detections."""
+    """Run YOLO on a frame and return bird detections."""
     results = model(image_path, verbose=False, conf=confidence)
     birds = []
     for r in results:
@@ -149,29 +158,29 @@ def moondream_identify_batch(image_path, bbox, moondream_url):
     return "Unknown bird"
 
 
-def log_to_census(species, caption):
-    """Log detection to wildlife census."""
-    if not os.path.exists(CENSUS_SCRIPT):
-        return
-    try:
-        subprocess.run(
-            [CENSUS_SCRIPT, "log", species, "1", f"YOLO+Moondream: {caption[:100]}"],
-            capture_output=True, timeout=10,
-        )
-    except (subprocess.TimeoutExpired, OSError) as exc:
-        logger.warning("Census logging failed: %s", exc)
-
-
 def run_birdnet_async():
     """Start BirdNET listening in background."""
     birdnet_script = os.path.expanduser("~/.openclaw/skills/birdnet-audio/birdnet.sh")
     if os.path.exists(birdnet_script):
         logger.info("BirdNET recording (60s)...")
-        return subprocess.Popen(
-            [birdnet_script, "listen", "60"],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-        )
+        try:
+            return subprocess.Popen(
+                [birdnet_script, "listen", "60"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            )
+        except OSError as exc:
+            logger.warning("Failed to start BirdNET: %s", exc)
     return None
+
+
+def _check_birdnet(proc):
+    """Check a BirdNET subprocess for results and restart if finished."""
+    if proc is None or proc.poll() is None:
+        return proc  # Still running or never started
+    stdout = proc.stdout.read().decode() if proc.stdout else ""
+    if "detected" in stdout.lower() and "no bird" not in stdout.lower():
+        logger.info("BirdNET: %s", stdout.strip())
+    return run_birdnet_async()
 
 
 def main():
@@ -225,16 +234,10 @@ def main():
                 except OSError:
                     pass
                 time.sleep(config.interval)
-
-                # Cycle BirdNET
-                if birdnet_proc and birdnet_proc.poll() is not None:
-                    stdout = birdnet_proc.stdout.read().decode() if birdnet_proc.stdout else ""
-                    if "detected" in stdout.lower() and "no bird" not in stdout.lower():
-                        logger.info("BirdNET: %s", stdout.strip())
-                    birdnet_proc = run_birdnet_async()
+                birdnet_proc = _check_birdnet(birdnet_proc)
                 continue
 
-            # BIRD DETECTED!
+            # Bird detected
             logger.info("%d bird(s) detected!", len(birds))
             species_labels = []
 
@@ -250,7 +253,7 @@ def main():
                 logger.info("Moondream ID: %s", species)
 
                 clean_species = species.split(",")[0].split(".")[0].strip()
-                log_to_census(clean_species, species)
+                _log_to_census(clean_species, species, config.census_script)
 
             annotated_path = annotate_frame(image_path, birds, species_labels)
 
@@ -270,13 +273,7 @@ def main():
             shutil.copy2(annotated_path, det_path)
             logger.info("Saved: %s", det_path)
 
-            # Cycle BirdNET
-            if birdnet_proc and birdnet_proc.poll() is not None:
-                stdout = birdnet_proc.stdout.read().decode() if birdnet_proc.stdout else ""
-                if "detected" in stdout.lower() and "no bird" not in stdout.lower():
-                    logger.info("BirdNET: %s", stdout.strip())
-                birdnet_proc = run_birdnet_async()
-
+            birdnet_proc = _check_birdnet(birdnet_proc)
             time.sleep(config.interval)
 
     except KeyboardInterrupt:
@@ -290,7 +287,7 @@ def main():
     print(f"   Total birds spotted: {sum(d['num_birds'] for d in detections)}")
     print(f"   Duration: {int(time.time() - start_time)}s")
     if detections:
-        print(f"\n   Detection Log:")
+        print("\n   Detection Log:")
         for d in detections:
             species_str = ", ".join(d["species"])
             print(f"   • [{d['elapsed']}s] {d['num_birds']} bird(s): {species_str}")
