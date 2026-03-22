@@ -25,6 +25,7 @@ MODEL_NAME = sys.argv[sys.argv.index("--model") + 1] if "--model" in sys.argv el
 BIRD_CLASS_ID = 14
 CONFIDENCE_THRESHOLD = 0.15
 DETECTION_PERSIST_SECONDS = 3
+MIN_BIRD_SIZE = 50  # Minimum pixel width/height to trigger Moondream species ID
 MOONDREAM_URL = "http://localhost:2020"
 MAX_DETECTION_FILES = 500  # Auto-cleanup after this many saved frames
 MAX_CONCURRENT_VIEWERS = 5
@@ -179,10 +180,14 @@ def camera_thread():
                 cv2.rectangle(overlay, (x1-1, y1-1), (x2+1, y2+1), color, 3)
                 display = cv2.addWeighted(overlay, 0.2, display, 0.8, 0)
 
+                bird_w = x2 - x1
+                bird_h = y2 - y1
                 label = f"Bird {conf:.0%}"
                 sp = stats["last_species"]
-                if sp and sp != "—":
-                    label = f"{sp.split(',')[0][:22]} {conf:.0%}"
+                if sp and sp != "—" and "unknown" not in sp.lower():
+                    label = f"{sp.split(',')[0].split('.')[0][:22]} {conf:.0%}"
+                if bird_w < MIN_BIRD_SIZE or bird_h < MIN_BIRD_SIZE:
+                    label = f"Bird {conf:.0%} (distant)"
                 (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)
                 cv2.rectangle(display, (x1, y1 - th - 10), (x1 + tw + 6, y1), color, -1)
                 cv2.putText(display, label, (x1 + 3, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2)
@@ -286,11 +291,14 @@ def yolo_thread():
             det_path = os.path.join(DETECTIONS_DIR, f"det_{ts_str}.jpg")
             cv2.imwrite(det_path, det_frame)
 
-            # Moondream species ID (with cooldown)
+            # Moondream species ID (with cooldown, only for birds big enough to identify)
             if time.time() > moondream_cooldown:
                 biggest = max(birds, key=lambda b: (b[2]-b[0]) * (b[3]-b[1]))
-                threading.Thread(target=moondream_identify, args=(frame.copy(), biggest[:4]), daemon=True).start()
-                moondream_cooldown = time.time() + 5
+                bw = biggest[2] - biggest[0]
+                bh = biggest[3] - biggest[1]
+                if bw >= MIN_BIRD_SIZE and bh >= MIN_BIRD_SIZE:
+                    threading.Thread(target=moondream_identify, args=(frame.copy(), biggest[:4]), daemon=True).start()
+                    moondream_cooldown = time.time() + 5
 
         time.sleep(0.01)  # Yield to other threads
 
