@@ -114,7 +114,7 @@ python3 bird_watcher_stream.py
 The script will print a URL like:
 ```
 🐦 Bird Watcher Live Stream v3
-   🔐 Stream URL: http://192.168.1.44:8888?token=abc123xyz
+   🔐 Stream URL: http://YOUR_LOCAL_IP:8888?token=abc123xyz
 ```
 
 Open that URL on your phone or any device on the same WiFi. The token is generated fresh each time you start the stream — only people with the URL can view your camera feed.

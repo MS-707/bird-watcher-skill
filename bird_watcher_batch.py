@@ -26,8 +26,9 @@ from ultralytics import YOLO
 MOONDREAM_URL = "http://localhost:2020"
 CAPTURE_INTERVAL = int(sys.argv[sys.argv.index("--interval") + 1]) if "--interval" in sys.argv else 8
 DURATION = int(sys.argv[sys.argv.index("--duration") + 1]) if "--duration" in sys.argv else 1800
-OUTPUT_DIR = "/Users/lobstarr/.openclaw/workspace/builds/bird-watcher/captures"
-DETECTIONS_DIR = "/Users/lobstarr/.openclaw/workspace/builds/bird-watcher/detections"
+SKILL_DIR = os.path.dirname(os.path.abspath(__file__))
+OUTPUT_DIR = os.path.join(SKILL_DIR, "captures")
+DETECTIONS_DIR = os.path.join(SKILL_DIR, "detections")
 CENSUS_SCRIPT = os.path.expanduser("~/.openclaw/skills/wildlife-census/census.sh")
 SNAP_DIR = "/tmp/victor_vision"
 
