@@ -6,6 +6,9 @@ An [OpenClaw](https://openclaw.ai) skill that turns any Mac with a webcam into a
 
 Everything runs locally on your machine. No cloud. No subscriptions. No data leaves your network.
 
+![Bird detected in flight with YOLO bounding box — Forestville, CA](docs/detection-example.jpg)
+*Real detection: bird in flight captured at 64% confidence with green bounding box, HUD overlay showing bird count and fps. Forestville, CA.*
+
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Python](https://img.shields.io/badge/python-3.10+-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)
