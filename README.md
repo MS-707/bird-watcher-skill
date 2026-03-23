@@ -284,7 +284,7 @@ This skill accesses your camera and streams video on your local network. Please 
 
 Bird Watcher works standalone, but it's designed to integrate with the OpenClaw agent ecosystem:
 
-- **Wildlife Census** — if the `wildlife-census` skill is installed, every detection is automatically logged with species, count, and timestamp
+- **[Wildlife Census](https://github.com/MS-707/wildlife-census-skill)** — separate OpenClaw skill for species logging and life lists. If installed, every Bird Watcher detection is automatically logged with species, count, and timestamp
 
 - **Telegram Alerts** — your OpenClaw agent can send detection photos to Telegram when a bird is spotted
 - **Scheduled Sessions** — set up cron jobs to run batch detection during peak feeding times (early morning, late afternoon)
