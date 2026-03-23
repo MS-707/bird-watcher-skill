@@ -22,7 +22,7 @@ You point a camera at your bird feeder. Bird Watcher does the rest:
 - **Streams live video** to any device on your network — phone, tablet, laptop, or AirPlay to your TV
 - **Saves every detection** — both the original frame and the annotated version with bounding boxes, timestamped
 - **Logs to wildlife census** — if the OpenClaw `wildlife-census` skill is installed, sightings are recorded automatically
-- **Listens for bird calls** — optional BirdNET integration for audio-based species identification
+
 
 The camera feed and YOLO detection run in separate threads. The video is always smooth at full camera fps (~30fps). YOLO processes independently at ~10-15fps on Apple Silicon. You never see lag.
 
@@ -259,7 +259,7 @@ This skill accesses your camera and streams video on your local network. Please 
 Bird Watcher works standalone, but it's designed to integrate with the OpenClaw agent ecosystem:
 
 - **Wildlife Census** — if the `wildlife-census` skill is installed, every detection is automatically logged with species, count, and timestamp
-- **BirdNET Audio** — if the `birdnet-audio` skill is installed, audio species identification runs in parallel with video detection
+
 - **Telegram Alerts** — your OpenClaw agent can send detection photos to Telegram when a bird is spotted
 - **Scheduled Sessions** — set up cron jobs to run batch detection during peak feeding times (early morning, late afternoon)
 
@@ -280,7 +280,7 @@ Bird Watcher works standalone, but it's designed to integrate with the OpenClaw 
 
 - **[YOLOv11](https://github.com/ultralytics/ultralytics)** by Ultralytics — the object detection model
 - **[Moondream](https://moondream.ai/)** — local vision-language model for species identification
-- **[BirdNET](https://github.com/kahst/BirdNET-Analyzer)** by Cornell Lab of Ornithology — audio species identification
+
 - **[OpenClaw](https://openclaw.ai)** — the agent framework this skill is designed for
 - **[Birds-YOLO](https://pmc.ncbi.nlm.nih.gov/articles/PMC12650164/)** — research paper on YOLOv11 bird detection that inspired the approach
 

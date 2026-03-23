@@ -1,6 +1,6 @@
 ---
 name: bird-watcher
-description: "Live bird detection with YOLO + VLM species ID. Streams a real-time annotated video feed to any device on your network. Detects birds with bounding boxes, identifies species via Moondream VLM, records audio with BirdNET. Use when: user asks to watch for birds, detect wildlife, set up a bird camera, or run a wildlife monitoring stream."
+description: "Live bird detection with YOLO + VLM species ID. Streams a real-time annotated video feed to any device on your network. Detects birds with bounding boxes, identifies species via Moondream VLM. Use when: user asks to watch for birds, detect wildlife, set up a bird camera, or run a wildlife monitoring stream."
 ---
 
 # Bird Watcher — Live YOLO Bird Detection + VLM Species ID
@@ -13,7 +13,7 @@ Real-time bird detection system using YOLOv11 for fast visual detection and Moon
 - **Species identification** via Moondream VLM when a bird is detected
 - **Auto-saves** original + annotated frames of every detection
 - **Wildlife census logging** for tracking species over time
-- **BirdNET audio** detection (optional, requires microphone)
+
 - **AirPlay compatible** — open the URL on iPhone, cast to Apple TV
 
 ## Architecture
@@ -208,8 +208,7 @@ If the `wildlife-census` skill is installed, detections are automatically logged
 ~/.openclaw/skills/wildlife-census/census.sh log "Scrub Jay" 1 "BirdWatcher: detected at feeder"
 ```
 
-### BirdNET Audio
-If the `birdnet-audio` skill is installed, audio detection runs in parallel with video.
+
 
 ### Telegram Alerts
 Configure your OpenClaw agent to send detection photos to Telegram when a bird is spotted.
@@ -250,5 +249,5 @@ Configure your OpenClaw agent to send detection photos to Telegram when a bird i
 
 - [YOLOv11](https://github.com/ultralytics/ultralytics) by Ultralytics
 - [Moondream](https://moondream.ai/) for local VLM inference
-- [BirdNET](https://github.com/kahst/BirdNET-Analyzer) by Cornell Lab of Ornithology
+
 - Created by Victor & Mark as an OpenClaw skill
