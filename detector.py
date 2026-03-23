@@ -32,6 +32,7 @@ def yolo_thread(model, config, shared_state, moondream_available):
         Whether Moondream VLM is reachable.
     """
     stats = shared_state["stats"]
+    s_lock = shared_state.get("stats_lock")
     moondream_cooldown = 0
     frame_count = 0
     fps_start = time.time()
@@ -66,13 +67,18 @@ def yolo_thread(model, config, shared_state, moondream_available):
                 shared_state["current_boxes"] = birds
                 shared_state["boxes_timestamp"] = time.time()
 
-            stats["total_detections"] += 1
+            if s_lock:
+                with s_lock:
+                    stats["total_detections"] += 1
+            else:
+                stats["total_detections"] += 1
 
-            # Auto-cleanup old detections if over limit
-            _cleanup_detections(config.detections_dir, config.max_detection_files)
+            if not getattr(config, 'no_save', False):
+                # Auto-cleanup old detections if over limit
+                _cleanup_detections(config.detections_dir, config.max_detection_files)
 
-            # Save detection frames
-            _save_detection_frames(frame, birds, config.detections_dir)
+                # Save detection frames
+                _save_detection_frames(frame, birds, config.detections_dir)
 
             # Moondream species ID (with cooldown, only for birds big enough)
             if time.time() > moondream_cooldown:
@@ -82,7 +88,7 @@ def yolo_thread(model, config, shared_state, moondream_available):
                 if bw >= config.min_bird_size and bh >= config.min_bird_size:
                     threading.Thread(
                         target=moondream_identify,
-                        args=(frame.copy(), biggest[:4], config, stats, moondream_available),
+                        args=(frame.copy(), biggest[:4], config, stats, moondream_available, s_lock),
                         daemon=True,
                     ).start()
                     moondream_cooldown = time.time() + 5

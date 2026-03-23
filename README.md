@@ -72,26 +72,45 @@ cd bird-watcher-skill
 
 ### Step 2: Install dependencies
 
-```bash
-pip3 install -r requirements.txt
-```
-
-If you get a `externally-managed-environment` error on newer Python:
-```bash
-pip3 install --break-system-packages -r requirements.txt
-```
-
-Or use a virtual environment:
+**Recommended: use a virtual environment**
 ```bash
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+<details>
+<summary>Alternative: system-wide install (not recommended)</summary>
+
+```bash
+pip3 install -r requirements.txt
+```
+
+If you get an `externally-managed-environment` error on newer Python:
+```bash
+pip3 install --break-system-packages -r requirements.txt
+```
+
+> ⚠️ **Warning:** `--break-system-packages` bypasses Python's environment isolation and can cause conflicts with system packages. Use a virtual environment instead whenever possible.
+
+</details>
+
 **Verify everything installed:**
 ```bash
 python3 -c "import cv2, flask, ultralytics, requests; print('All dependencies OK')"
 ```
+
+### Step 2.5: Install Moondream Station (optional — for species ID)
+
+Species identification requires [Moondream Station](https://moondream.ai) running locally. Without it, birds are still detected with bounding boxes but labeled generically as "Bird" instead of by species name.
+
+1. Visit **https://moondream.ai** for installation instructions
+2. Once installed and running, verify with:
+   ```bash
+   curl http://localhost:2020/health
+   ```
+   You should see a JSON response with `"server": "moondream-station"`.
+3. Bird Watcher will automatically detect Moondream on startup and enable species ID.
 
 ### Step 3: Grant camera permission
 
@@ -132,6 +151,7 @@ python3 main.py --model yolo11n.pt     # Nano — fastest, less accurate
 python3 main.py --model yolo11m.pt     # Medium — slower, more accurate
 python3 main.py --confidence 0.20      # Higher = fewer false positives
 python3 main.py --persist 5            # Seconds to keep bounding box visible
+python3 main.py --no-save              # Don't save detection frames to disk
 
 # Environment variables
 BIRDWATCH_PORT=9999 python3 main.py

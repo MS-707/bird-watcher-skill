@@ -5,9 +5,11 @@ Handles argparse CLI, environment variable overrides, and shared constants.
 """
 
 import argparse
+import collections
 import logging
 import os
 import secrets
+import threading
 
 logger = logging.getLogger("bird-watcher")
 
@@ -72,6 +74,10 @@ def build_stream_parser():
         default=_env_int("BIRDWATCH_PERSIST", 3),
         help="Seconds to keep bounding boxes on screen after detection (default: 3, env: BIRDWATCH_PERSIST)"
     )
+    parser.add_argument(
+        "--no-save", action="store_true", default=False,
+        help="Disable saving detection frames to disk"
+    )
     return parser
 
 
@@ -99,6 +105,10 @@ def build_batch_parser():
         "--confidence", type=float,
         default=_env_float("BIRDWATCH_CONFIDENCE", 0.15),
         help="YOLO confidence threshold (default: 0.15, env: BIRDWATCH_CONFIDENCE)"
+    )
+    parser.add_argument(
+        "--no-save", action="store_true", default=False,
+        help="Disable saving detection frames to disk"
     )
     return parser
 
@@ -146,3 +156,19 @@ def setup_logging(level=logging.INFO):
         format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
+
+
+# Thread-safe stats lock — acquire before reading or writing stats dict values.
+stats_lock = threading.Lock()
+
+
+def make_stats():
+    """Create a fresh stats dictionary with thread-safe detection_log."""
+    return {
+        "camera_fps": 0,
+        "yolo_fps": 0,
+        "bird_count": 0,
+        "total_detections": 0,
+        "last_species": "Bird",
+        "detection_log": collections.deque(maxlen=100),
+    }

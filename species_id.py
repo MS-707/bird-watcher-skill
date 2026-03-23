@@ -30,7 +30,7 @@ def verify_moondream(moondream_url):
     return False
 
 
-def moondream_identify(img, bbox, config, stats, moondream_available):
+def moondream_identify(img, bbox, config, stats, moondream_available, stats_lock=None):
     """
     Species ID via Moondream VLM.
 
@@ -46,11 +46,16 @@ def moondream_identify(img, bbox, config, stats, moondream_available):
         Shared stats dictionary (mutated in-place).
     moondream_available : bool
         Whether Moondream is reachable.
+    stats_lock : threading.Lock or None
+        Lock for stats mutations. If None, mutations are unguarded.
     """
     if not moondream_available:
         return
 
     from datetime import datetime
+    from contextlib import nullcontext
+
+    lock = stats_lock if stats_lock is not None else nullcontext()
 
     try:
         x1, y1, x2, y2 = bbox
@@ -82,15 +87,15 @@ def moondream_identify(img, bbox, config, stats, moondream_available):
                 "unknown", "not sure", "can't tell", "i can't", "cannot",
                 "unclear", "hard to", "difficult to", "image", "photo", "picture",
             ]
-            if species and not any(bad in species.lower() for bad in bad_answers):
-                stats["last_species"] = species
+            with lock:
+                if species and not any(bad in species.lower() for bad in bad_answers):
+                    stats["last_species"] = species
 
-            stats["detection_log"].append({
-                "time": datetime.now().strftime("%H:%M:%S"),
-                "species": species,
-            })
-            if len(stats["detection_log"]) > 100:
-                stats["detection_log"].pop(0)
+                stats["detection_log"].append({
+                    "time": datetime.now().strftime("%H:%M:%S"),
+                    "species": species,
+                })
+                # deque(maxlen=100) auto-evicts oldest entries
 
             # Log to wildlife census
             clean = species.split(",")[0].split(".")[0].strip()

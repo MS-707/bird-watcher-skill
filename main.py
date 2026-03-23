@@ -7,14 +7,18 @@ Bounding boxes overlay onto the smooth feed without slowing it down.
 Usage: python3 main.py [--port 8888] [--model yolo11s.pt] [--confidence 0.15] [--persist 3]
 """
 
+import ipaddress
 import os
+import signal
 import socket
 import logging
+import sys
 import threading
 
+import cv2
 from ultralytics import YOLO
 
-from config import get_config, setup_logging
+from config import get_config, setup_logging, make_stats, stats_lock
 from camera import camera_thread
 from detector import yolo_thread
 from species_id import verify_moondream
@@ -34,14 +38,8 @@ def build_shared_state():
         "boxes_timestamp": 0,
         "stream_jpeg": None,
         "stream_lock": threading.Lock(),
-        "stats": {
-            "camera_fps": 0,
-            "yolo_fps": 0,
-            "bird_count": 0,
-            "total_detections": 0,
-            "last_species": "Bird",
-            "detection_log": [],
-        },
+        "stats": make_stats(),
+        "stats_lock": stats_lock,
     }
 
 
@@ -79,6 +77,15 @@ def main():
 
     local_ip = get_local_ip()
 
+    # Check if IP is public (non-RFC1918)
+    try:
+        ip_obj = ipaddress.ip_address(local_ip)
+        if not ip_obj.is_private:
+            print("⚠️  WARNING: Your IP appears to be public. "
+                  "The camera stream may be accessible from the internet.")
+    except ValueError:
+        pass
+
     # Startup banner (user-facing HUD — intentionally print, not logger)
     print(f"\n{'=' * 60}")
     print(f"🐦 Bird Watcher Live Stream v3 — Decoupled Architecture")
@@ -99,6 +106,20 @@ def main():
     print(f"")
     print(f"   AirPlay: Open the URL on iPhone → AirPlay to TV")
     print(f"{'=' * 60}\n")
+
+    # Graceful shutdown handler
+    def _shutdown_handler(signum, frame):
+        print("\n🐦 Shutting down Bird Watcher...")
+        # Release camera if possible
+        try:
+            cap = cv2.VideoCapture(0)
+            cap.release()
+        except Exception:
+            pass
+        print("Camera released. Goodbye!")
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, _shutdown_handler)
 
     # Start threads
     t_cam = threading.Thread(target=camera_thread, args=(config, shared_state), daemon=True)

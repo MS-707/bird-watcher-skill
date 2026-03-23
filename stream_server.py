@@ -4,6 +4,7 @@ Bird Watcher — Flask stream server module.
 MJPEG streaming server with token-based authentication and viewer limits.
 """
 
+import hmac
 import time
 import logging
 import threading
@@ -61,10 +62,22 @@ def _generate_mjpeg():
         time.sleep(0.033)
 
 
+def _counted_stream(gen):
+    """Wrap a generator to accurately track active viewer count."""
+    global _active_viewers
+    with _viewers_lock:
+        _active_viewers += 1
+    try:
+        yield from gen
+    finally:
+        with _viewers_lock:
+            _active_viewers = max(0, _active_viewers - 1)
+
+
 @app.route('/')
 def index():
     token = request.args.get('token', '')
-    if token != _config.stream_token:
+    if not hmac.compare_digest(token, _config.stream_token):
         return (
             '<html><body style="background:#000;color:#fff;font-family:sans-serif;'
             'display:flex;align-items:center;justify-content:center;height:100vh">'
@@ -78,19 +91,13 @@ def index():
 
 @app.route('/feed')
 def video_feed():
-    global _active_viewers
     token = request.args.get('token', '')
-    if token != _config.stream_token:
+    if not hmac.compare_digest(token, _config.stream_token):
         abort(403)
     with _viewers_lock:
         if _active_viewers >= _config.max_concurrent_viewers:
             abort(503)
-        _active_viewers += 1
-    try:
-        return Response(
-            _generate_mjpeg(),
-            mimetype='multipart/x-mixed-replace; boundary=frame',
-        )
-    finally:
-        with _viewers_lock:
-            _active_viewers = max(0, _active_viewers - 1)
+    return Response(
+        _counted_stream(_generate_mjpeg()),
+        mimetype='multipart/x-mixed-replace; boundary=frame',
+    )
