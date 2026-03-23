@@ -17,8 +17,8 @@ Everything runs locally on your machine. No cloud. No subscriptions. No data lea
 
 You point a camera at your bird feeder. Bird Watcher does the rest:
 
-- **Detects birds in real-time** using YOLOv11 — green bounding boxes appear the instant a bird enters the frame
-- **Identifies species** by cropping the detected bird and asking a local VLM (Moondream) what it is
+- **Detects birds in real-time** using YOLOv11 — green bounding boxes appear the instant a bird enters the frame, even mid-flight
+- **Identifies species when close enough** — when a detected bird is large enough in frame (50+ pixels), the system crops the region and asks a local VLM (Moondream) for species identification. Distant or fast fly-by birds get labeled "Bird" with confidence percentage. Species ID works best with birds perched nearby (feeders, railings, branches within ~15 feet of the camera).
 - **Streams live video** to any device on your network — phone, tablet, laptop, or AirPlay to your TV
 - **Saves every detection** — both the original frame and the annotated version with bounding boxes, timestamped
 - **Logs to wildlife census** — if the OpenClaw `wildlife-census` skill is installed, sightings are recorded automatically
@@ -58,7 +58,7 @@ Intel Macs work but expect ~5-8fps YOLO processing instead of 10-15fps.
 
 - **It cannot access the camera without your explicit permission.** macOS requires you to grant camera access interactively — no script can bypass this. You must run a command in Terminal and click "Allow."
 - **It cannot stream to the internet by default.** The feed is only accessible on your local network. This is intentional for privacy. See the Security section below if you want remote access.
-- **It cannot identify every species perfectly.** Moondream is a general-purpose VLM, not a bird-specific model. It's good but not ornithologist-grade. Common backyard birds (jays, sparrows, robins, finches, hawks) work well. Rare species may get generic labels.
+- **Species ID requires proximity.** Moondream is a general-purpose VLM, not a bird-specific model. It works best when birds are close to the camera — perched on a feeder, railing, or branch within about 15 feet. Distant birds and fast fly-bys are detected with bounding boxes but labeled generically as "Bird" rather than attempting an inaccurate species guess. Common backyard birds (jays, sparrows, robins, finches, hawks) at close range get reliable species identification.
 - **It cannot run in the background on macOS.** The camera permission is tied to the foreground Terminal process. The script must run in an open Terminal window.
 
 ## Installation
