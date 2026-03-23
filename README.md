@@ -9,6 +9,9 @@ Everything runs locally on your machine. No cloud. No subscriptions. No data lea
 ![Bird detected in flight with YOLO bounding box — Forestville, CA](docs/detection-example.jpg)
 *Real detection: bird in flight captured at 64% confidence with green bounding box, HUD overlay showing bird count and fps. Forestville, CA.*
 
+![Second detection — bird silhouette at 53% confidence against treeline](docs/detection-example-2.jpg)
+*Second detection: bird at 53% confidence against the treeline. Outdoor deck setup, Sonoma County.*
+
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Python](https://img.shields.io/badge/python-3.10+-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)
