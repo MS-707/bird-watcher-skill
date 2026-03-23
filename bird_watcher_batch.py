@@ -36,34 +36,35 @@ from species_id import verify_moondream, _log_to_census
 
 logger = logging.getLogger("bird-watcher")
 
-SNAP_DIR = "/tmp/victor_vision"
+_batch_camera = None
+
+
+def _get_camera():
+    global _batch_camera
+    if _batch_camera is None or not _batch_camera.isOpened():
+        _batch_camera = cv2.VideoCapture(0)
+        if not _batch_camera.isOpened():
+            logger.error("Cannot open camera. Grant permission: python3 -c \"import cv2; cap = cv2.VideoCapture(0); print(cap.isOpened()); cap.release()\"")
+            return None
+        _batch_camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+        _batch_camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+    return _batch_camera
 
 
 def capture_frame(output_dir):
-    """Capture a frame via the snap watcher (has camera permissions)."""
-    os.makedirs(SNAP_DIR, exist_ok=True)
-    ready_file = os.path.join(SNAP_DIR, "ready")
-    try:
-        os.remove(ready_file)
-    except FileNotFoundError:
-        pass
+    """Capture a frame directly from the camera via OpenCV."""
+    cap = _get_camera()
+    if cap is None:
+        return None
 
-    with open(os.path.join(SNAP_DIR, "request"), "w") as f:
-        f.write("bird detection")
+    ret, frame = cap.read()
+    if not ret or frame is None:
+        return None
 
-    for _ in range(16):
-        if os.path.exists(ready_file):
-            with open(ready_file) as f:
-                src_path = f.read().strip()
-            os.remove(ready_file)
-            if os.path.exists(src_path) and os.path.getsize(src_path) > 0:
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                dst_path = os.path.join(output_dir, f"frame_{timestamp}.jpg")
-                shutil.copy2(src_path, dst_path)
-                return dst_path
-            return None
-        time.sleep(0.5)
-    return None
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    dst_path = os.path.join(output_dir, f"frame_{timestamp}.jpg")
+    cv2.imwrite(dst_path, frame)
+    return dst_path
 
 
 def yolo_detect_birds(model, image_path, confidence, bird_class_id):
@@ -308,6 +309,9 @@ def main():
             "duration_seconds": int(time.time() - start_time),
             "results": detections,
         }, f, indent=2)
+
+    if _batch_camera is not None and _batch_camera.isOpened():
+        _batch_camera.release()
 
     return detections
 
